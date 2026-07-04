@@ -1,19 +1,16 @@
-# Idle Legends — Alpha 1 Foundation
+# Idle Legends — Alpha 1.1 OSRS Layout
 
-Rebuilt around the real direction:
+This rebuild moves the interface toward the OSRS mobile inspiration:
 
-- Landscape-only MMO interface
-- Expedition manager fantasy
-- No personal inventory
-- Shared Expedition Stores
-- Roster/adventurer equipment
-- Individual adventurer HP and gear
-- HP starts at 10 and regenerates passively
-- Buildings/activities instead of floating action bubbles
-- Global crafting recipes
-- Collapsible current action bar
-- OSRS-style chat/log panel
-- Area quests hidden in Quest Log dropdowns
-- Map + center info + side management panel
+- Big scrollable world/map as the main gameplay area
+- Left utility strip with chat toggle and quick adventurer select
+- Collapsed chat dropdown over the world area
+- Area/building dropdowns inside the map area
+- Right-side management panel
+- Vertical right-side panel buttons for Roster, Stores, Skills, Crafting, Market, Quests, Settings
+- Current assignment box above the right panel where OSRS has the minimap
+- Expedition Stores, no personal inventory
+- Adventurer equipment persists until unequipped
+- Landscape-only
 
-Artwork is placeholder emoji for now.
+Artwork remains emoji placeholders only.
