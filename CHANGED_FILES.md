@@ -1,30 +1,17 @@
-# Changed Files — Alpha 1 Foundation
+# Changed Files — Alpha 1.1 OSRS Layout
 
-Upload/replace these root files:
+Upload/replace these files:
 
-- index.html
-- manifest.json
-- firebase.json
-- firestore.rules
-- firestore.indexes.json
-- package.json
-- README.md
-- CHANGED_FILES.md
-- .nojekyll
-
-Upload/replace this whole folder:
-
-- app/
-
-Inside app/:
-
-- app/main.js
 - app/data/gameData.js
-- app/styles/base.css
+- app/main.js
+- app/ui/render.js
 - app/styles/layout.css
 - app/styles/components.css
+- README.md
+- CHANGED_FILES.md
 
-Recommended mobile workflow:
-1. Delete old root files that are not in this build.
-2. Upload the listed root files.
-3. Upload the app folder contents preserving folders.
+No data files need to be deleted for this update.
+
+Important:
+- Because the save key did not change, your current local save may persist.
+- If the UI looks weird from old data, use Settings → Reset Local Save.
