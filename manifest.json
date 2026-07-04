@@ -1,0 +1,10 @@
+{
+  "name": "Idle Legends Manager",
+  "short_name": "ILM",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b1018",
+  "theme_color": "#0b1018",
+  "description": "A fantasy management MMO. You plan. They live.",
+  "icons": []
+}

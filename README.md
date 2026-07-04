@@ -1,53 +1,73 @@
-# Idle Legends Manager
+# Idle Legends Manager — Sprint 1 Complete Root Build
 
-Production-oriented Blaze build foundation.
+This is the permanent Sprint 1 foundation.
 
-## Current Build
+## Sprint 1 includes
 
-Version: `0.1.0-dream-foundation`
-
-This is not a static mockup. It is a Firebase-backed project foundation:
-
-- React + Vite mobile-first client
-- Firebase Auth email/password + Google
-- Firestore read model
-- Cloud Functions server-authoritative gameplay actions
-- Firestore rules blocking direct gameplay writes
+- Email/password login
+- Google login
+- Firebase Auth integration
+- Server-owned player save document
 - Expedition creation
-- First adventurer
-- World map
-- Cities and locked areas
-- Skills
-- Items
-- Activities
-- Combat starter loop
-- Processing loop
-- Bank/inventory
-- King's Seal / Royal Charter server function
-- Hardened market rule documented in UI
+- First adventurer creation
+- Mobile-first shell
+- Living world map foundation
+- Central city + four major cities
+- Quest-locked side locations
+- Visible road network
+- Your adventurer marker
+- Other expedition placeholder markers for world-life feel
+- Travel timer and map movement
+- Activity engine
+- Active action UI
+- 8 real hour hard stop
+- Manual stop
+- Collect/resolve progress
+- Tool requirements
+- Inventory
+- Bank
+- Deposit all
+- Skill XP and levels
+- Quest requirements and unlocks
+- Hardened status display
+- Royal Charter timer support
+- King's Seal activation function
+- Server-authoritative gameplay writes
+- Locked Firestore rules
 
-## GitHub Hosting First
+## Root-level workflow
 
-If hosting with GitHub Pages for now:
+All files are at repo root for easier mobile GitHub editing.
 
-1. Upload the whole repo to GitHub.
-2. In GitHub repo settings, enable Pages.
-3. Firebase Console > Authentication > Settings > Authorized domains.
-4. Add your GitHub Pages domain.
+## Required Firebase setup
 
-For GitHub Pages, Vite may need a `base` path if your project is hosted at `username.github.io/repo-name` instead of a custom domain. If the page loads blank after deployment, tell me your GitHub Pages URL and I will set the exact `base` value.
+- Firebase Authentication enabled
+  - Email/password
+  - Google
+- Cloud Firestore created in production mode
+- Cloud Functions enabled
+- Blaze plan enabled
 
-## Firebase Deploy Later
+## Deploy
 
-When ready to deploy Firebase Hosting and Functions:
+From a PC or GitHub Actions later:
 
 ```bash
 npm install
-cd functions && npm install && cd ..
-npm run build
-firebase deploy
+firebase deploy --only firestore:rules
+firebase deploy --only functions
+firebase deploy --only hosting
 ```
+
+If using GitHub Pages for client hosting, still deploy:
+```bash
+firebase deploy --only firestore:rules
+firebase deploy --only functions
+```
+
+Then add your GitHub Pages URL to:
+Firebase Console → Authentication → Settings → Authorized domains
 
 ## Important
 
-Cloud Functions are the game engine. The client does not directly write XP, drops, inventory, gold, or progression.
+The client does not write gameplay data to Firestore. Gameplay changes go through Cloud Functions.

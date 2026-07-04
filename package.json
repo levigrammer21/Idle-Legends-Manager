@@ -1,25 +1,19 @@
 {
-  "name": "idle-legends-manager",
+  "name": "idle-legends-manager-sprint-1",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": "20"
+  },
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
-    "deploy:hosting": "npm run build && firebase deploy --only hosting",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy": "firebase deploy",
     "deploy:functions": "firebase deploy --only functions",
-    "deploy:all": "npm run build && firebase deploy"
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy:hosting": "firebase deploy --only hosting"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "firebase": "latest",
-    "lucide-react": "latest"
-  },
-  "devDependencies": {}
+    "firebase-admin": "^12.5.0",
+    "firebase-functions": "^5.1.1"
+  }
 }

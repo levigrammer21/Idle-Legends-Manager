@@ -1,120 +1,511 @@
-const SAVE_KEY = 'ilm_engine_v001_save';
+import { auth, db, functions, googleProvider, fb } from "./firebase.js";
+import { GAME } from "./gameData.js";
+
+const app = document.getElementById("app");
+let user = null;
+let save = null;
+let unsub = null;
+let tab = "map";
+let selectedCity = "kingswatch";
+let tick = null;
+
+const call = (name) => fb.httpsCallable(functions, name);
 const now = () => Date.now();
-const fmtTime = ms => { if(ms<=0) return '0s'; const s=Math.floor(ms/1000); const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60; return h?`${h}h ${m}m`:m?`${m}m ${sec}s`:`${sec}s`; };
-const uid = () => Math.random().toString(36).slice(2,10);
-
-const WORLD = {
-  cities: {
-    kingswatch:{name:'Kingswatch', icon:'🏰', x:50,y:48, level:'1+', desc:'Capital hub, market, bank, guild hall, and first training grounds.', routes:['oakridge','irondeep','saltshore','emberfall'], activities:['oak_tree','training_rats','berry_patch','campfire']},
-    oakridge:{name:'Oakridge', icon:'🌲', x:18,y:22, level:'5+', desc:'Eastern forest city with timber, flax, hunting trails, and the Elder Woods questline.', routes:['kingswatch','elder_woods'], activities:['pine_tree','flax_field','forest_boars','rabbit_trail']},
-    irondeep:{name:'Irondeep', icon:'⛏️', x:82,y:20, level:'10+', desc:'Northern mining city, forges, stone roads, and access to mountain caves.', routes:['kingswatch','crystal_cave'], activities:['copper_vein','tin_vein','iron_vein','forge']},
-    saltshore:{name:'Saltshore', icon:'⚓', x:20,y:82, level:'15+', desc:'Southern port city for fishing, cooking, ships, and sea monsters.', routes:['kingswatch','reefwatch'], activities:['shore_fish','salt_crab','kitchen']},
-    emberfall:{name:'Emberfall', icon:'🔥', x:82,y:82, level:'20+', desc:'Western volcanic frontier for combat, monster mastery, rare hides, and dangerous bosses.', routes:['kingswatch','ash_cave'], activities:['ember_wolves','ash_mine']},
-  },
-  pois: {
-    elder_woods:{name:'Elder Woods', icon:'🌳', x:30,y:8, level:'Locked', desc:'Quest-locked ancient forest. Rumored home of a griffin mount.', requires:'Complete The Elder Bough quest', activities:['elder_tree','griffin_boss']},
-    crystal_cave:{name:'Crystal Cave', icon:'💎', x:92,y:8, level:'Locked', desc:'Remote rare mining cave north of Irondeep.', requires:'Complete Shattered Lantern quest', activities:['crystal_vein']},
-    reefwatch:{name:'Reefwatch', icon:'🐚', x:8,y:94, level:'Locked', desc:'Tiny fishing outpost beyond Saltshore.', requires:'Complete Tidekeeper Errand', activities:['reef_fish']},
-    ash_cave:{name:'Ash Cave', icon:'🕳️', x:94,y:94, level:'Locked', desc:'Combat cave with monsters worth processing.', requires:'Complete Smoke Below', activities:['cinder_bats']},
-  },
-  routes: [ ['kingswatch','oakridge'],['kingswatch','irondeep'],['kingswatch','saltshore'],['kingswatch','emberfall'],['oakridge','elder_woods'],['irondeep','crystal_cave'],['saltshore','reefwatch'],['emberfall','ash_cave'] ]
+const item = (id) => GAME.items[id] || { name:id, icon:"◼️", description:"Unknown item." };
+const skill = (id) => GAME.skills[id] || { name:id, icon:"•", purpose:"" };
+const level = (xp=0) => Math.max(1, Math.floor(Math.sqrt(xp / 45)) + 1);
+const nextXp = (lvl) => lvl * lvl * 45;
+const fmt = (ms) => {
+  ms = Math.max(0, ms|0);
+  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${sec}s`;
+  return `${sec}s`;
 };
+const qty = (bag,id) => Number(bag?.[id] || 0);
 
-const ACTIVITIES = {
-  oak_tree:{name:'Cut Oak Trees', skill:'Woodcutting', tool:'axe', city:'kingswatch', seconds:8, xp:8, yields:[['oak_log',1,1]], desc:'Basic wood for early tools, fletching, and higher-tier recipes.'},
-  pine_tree:{name:'Cut Pine Trees', skill:'Woodcutting', tool:'axe', city:'oakridge', seconds:11, xp:14, yields:[['pine_log',1,1]], desc:'Stronger wood used in bows and tool handles.'},
-  elder_tree:{name:'Cut Elder Trees', skill:'Woodcutting', tool:'axe', city:'elder_woods', seconds:30, xp:45, rareCap:12, rareRespawn:20*60*1000, yields:[['elder_log',1,1]], desc:'Rare timed tree. Depletes after a small batch, then rests.'},
-  copper_vein:{name:'Mine Copper Vein', skill:'Mining', tool:'pickaxe', city:'irondeep', seconds:9, xp:9, yields:[['copper_ore',1,1]], desc:'Entry ore for bronze-tier smithing.'},
-  tin_vein:{name:'Mine Tin Vein', skill:'Mining', tool:'pickaxe', city:'irondeep', seconds:9, xp:9, yields:[['tin_ore',1,1]], desc:'Pairs with copper for bronze.'},
-  iron_vein:{name:'Mine Iron Vein', skill:'Mining', tool:'pickaxe', city:'irondeep', seconds:14, xp:18, yields:[['iron_ore',1,1]], desc:'Core ore for serious tools and weapon upgrades.'},
-  crystal_vein:{name:'Mine Crystal Vein', skill:'Mining', tool:'pickaxe', city:'crystal_cave', seconds:40, xp:65, rareCap:8, rareRespawn:30*60*1000, yields:[['raw_crystal',1,1]], desc:'Rare timed node used in magical equipment.'},
-  shore_fish:{name:'Fish Shoreline', skill:'Fishing', tool:'fishing_rod', city:'saltshore', seconds:10, xp:10, yields:[['raw_sardine',1,1]], desc:'Early fish for cooking and combat food.'},
-  reef_fish:{name:'Fish Reef Spot', skill:'Fishing', tool:'fishing_rod', city:'reefwatch', seconds:28, xp:38, rareCap:18, rareRespawn:25*60*1000, yields:[['raw_reef_eel',1,1]], desc:'Rare fish spot with batch depletion.'},
-  berry_patch:{name:'Gather Berry Patch', skill:'Gathering', tool:null, city:'kingswatch', seconds:7, xp:7, yields:[['wild_berries',1,3],['plant_fiber',1,1]], desc:'General gathering covers herbs, flax, fibers, sticks, berries, and natural materials.'},
-  flax_field:{name:'Gather Flax Field', skill:'Gathering', tool:null, city:'oakridge', seconds:9, xp:11, yields:[['flax',1,2]], desc:'Flax feeds tailoring and bowstring crafting.'},
-  rabbit_trail:{name:'Hunt Rabbits', skill:'Hunting', tool:'snare', city:'oakridge', seconds:18, xp:20, yields:[['rabbit_carcass',1,1]], desc:'Hunting catches creatures. Processing turns carcasses into useful materials.'},
-  training_rats:{name:'Fight City Rats', skill:'Melee', tool:'weapon', city:'kingswatch', seconds:7, xp:8, combat:true, hp:12, yields:[['coins',2,5],['rat_carcass',1,1]], process:'process_rat', desc:'Weak combat target. Can be processed after fighting.'},
-  forest_boars:{name:'Fight Forest Boars', skill:'Melee', tool:'weapon', city:'oakridge', seconds:16, xp:24, combat:true, hp:42, yields:[['coins',5,12],['boar_carcass',1,1]], process:'process_boar', desc:'Tougher creature with useful hides if processed.'},
-  ember_wolves:{name:'Fight Ember Wolves', skill:'Melee', tool:'weapon', city:'emberfall', seconds:24, xp:38, combat:true, hp:75, yields:[['coins',10,22],['ember_wolf_carcass',1,1]], process:'process_ember_wolf', desc:'Monster family for future Monster Mastery.'},
-  griffin_boss:{name:'Challenge Elder Griffin', skill:'Melee', tool:'weapon', city:'elder_woods', seconds:300, xp:350, combat:true, hp:1200, boss:true, yields:[['griffin_feather',1,2],['griffin_beak',0,1]], mountChance:1000, desc:'Quest-locked boss. Extremely rare chance to bond as a non-tradable mount.'},
-  campfire:{name:'Cook Simple Meals', skill:'Cooking', tool:null, city:'kingswatch', seconds:8, xp:9, consumes:[['raw_sardine',1]], yields:[['cooked_sardine',1,1]], desc:'Turns fish into food for combat.'},
-  kitchen:{name:'Cook Port Meals', skill:'Cooking', tool:null, city:'saltshore', seconds:12, xp:16, consumes:[['raw_reef_eel',1]], yields:[['cooked_reef_eel',1,1]], desc:'Stronger food.'},
-  forge:{name:'Forge Bronze Axe', skill:'Smithing', tool:null, city:'irondeep', seconds:20, xp:25, consumes:[['copper_ore',1],['tin_ore',1],['oak_log',1]], yields:[['bronze_axe',1,1]], desc:'Early tool crafting. Later gear can consume previous-tier tools.'},
-  process_rat:{name:'Process Rat Carcasses', skill:'Processing', tool:null, city:'kingswatch', seconds:6, xp:6, consumes:[['rat_carcass',1]], yields:[['small_bone',1,1],['rat_tooth',0,1]], desc:'Trade combat time for materials.'},
-  process_boar:{name:'Process Boar Carcasses', skill:'Processing', tool:null, city:'oakridge', seconds:10, xp:12, consumes:[['boar_carcass',1]], yields:[['rough_hide',1,1],['small_bone',1,2]], desc:'Provides hides for tailoring/leatherworking.'},
-  process_ember_wolf:{name:'Process Ember Wolf Carcasses', skill:'Processing', tool:null, city:'emberfall', seconds:16, xp:20, consumes:[['ember_wolf_carcass',1]], yields:[['ember_hide',1,1],['ember_fang',0,1]], desc:'Midgame processing resource.'},
-  ash_mine:{name:'Mine Ashstone', skill:'Mining', tool:'pickaxe', city:'emberfall', seconds:20, xp:25, yields:[['ashstone',1,1]], desc:'Stone for volcanic crafting.'},
-  cinder_bats:{name:'Fight Cinder Bats', skill:'Ranged', tool:'weapon', city:'ash_cave', seconds:20, xp:32, combat:true, hp:55, yields:[['coins',8,15],['cinder_wing',1,1]], desc:'Future ranged training target.'}
-};
+function toast(text){
+  document.querySelector(".toast")?.remove();
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
 
-const ITEMS = {
-  coins:{name:'Coins', icon:'🪙', type:'Currency'}, oak_log:{name:'Oak Log',icon:'🪵',type:'Wood'}, pine_log:{name:'Pine Log',icon:'🪵',type:'Wood'}, elder_log:{name:'Elder Log',icon:'🌳',type:'Rare Wood'},
-  copper_ore:{name:'Copper Ore',icon:'🟠',type:'Ore'}, tin_ore:{name:'Tin Ore',icon:'⚪',type:'Ore'}, iron_ore:{name:'Iron Ore',icon:'⛓️',type:'Ore'}, raw_crystal:{name:'Raw Crystal',icon:'💎',type:'Rare Ore'}, ashstone:{name:'Ashstone',icon:'🪨',type:'Stone'},
-  wild_berries:{name:'Wild Berries',icon:'🫐',type:'Gathered'}, plant_fiber:{name:'Plant Fiber',icon:'🌿',type:'Fiber'}, flax:{name:'Flax',icon:'🌾',type:'Fiber'},
-  raw_sardine:{name:'Raw Sardine',icon:'🐟',type:'Fish'}, cooked_sardine:{name:'Cooked Sardine',icon:'🍽️',type:'Food'}, raw_reef_eel:{name:'Raw Reef Eel',icon:'🐍',type:'Fish'}, cooked_reef_eel:{name:'Cooked Reef Eel',icon:'🍲',type:'Food'},
-  rabbit_carcass:{name:'Rabbit Carcass',icon:'🐇',type:'Carcass'}, rat_carcass:{name:'Rat Carcass',icon:'🐀',type:'Carcass'}, boar_carcass:{name:'Boar Carcass',icon:'🐗',type:'Carcass'}, ember_wolf_carcass:{name:'Ember Wolf Carcass',icon:'🐺',type:'Carcass'},
-  small_bone:{name:'Small Bone',icon:'🦴',type:'Bone'}, rat_tooth:{name:'Rat Tooth',icon:'🦷',type:'Component'}, rough_hide:{name:'Rough Hide',icon:'🟫',type:'Hide'}, ember_hide:{name:'Ember Hide',icon:'🔥',type:'Hide'}, ember_fang:{name:'Ember Fang',icon:'🦷',type:'Component'},
-  bronze_axe:{name:'Bronze Axe',icon:'🪓',type:'Tool'}, griffin_feather:{name:'Griffin Feather',icon:'🪶',type:'Boss Component'}, griffin_beak:{name:'Griffin Beak',icon:'🦅',type:'Rare Component'},
-  cinder_wing:{name:'Cinder Wing',icon:'🦇',type:'Component'}
-};
-
-const SKILLS = ['Woodcutting','Mining','Fishing','Gathering','Hunting','Processing','Smithing','Fletching','Cooking','Tailoring','Crafting','Melee','Ranged','Magic','Monster Mastery'];
-function levelFromXp(xp){ return Math.max(1, Math.floor(Math.sqrt(xp/50))+1); }
-function defaultGame(){ const id=uid(); return {version:'0.0.1', createdAt:now(), screen:'map', selectedCity:null, toast:null, expedition:{name:'', banner:'Wolf', charterUntil:0, hardened:true, gold:25}, characters:[{id, name:'Rowan', icon:'🧔', location:'kingswatch', activity:null, queue:[], hp:100, maxHp:100, equipment:{axe:'bronze_axe', pickaxe:'starter_pickaxe', fishing_rod:'starter_rod', snare:'starter_snare', weapon:'training_sword', mount:null}}], skills:Object.fromEntries(SKILLS.map(s=>[s,{xp:0, points:0, tree:{}}])), inventory:{bronze_axe:1, coins:25}, bank:{}, mounts:[], pets:[], completedQuests:{}, rareNodes:{}, log:[]}; }
-let state = load() || defaultGame();
-function save(){ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
-function load(){ try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } }
-function addLog(msg){ state.log.unshift({t:now(),msg}); state.log=state.log.slice(0,40); }
-function toast(msg){ state.toast=msg; setTimeout(()=>{ if(state.toast===msg){state.toast=null; render();}},2800); }
-function addItem(id, qty){ if(id==='coins'){ state.expedition.gold += qty; } state.inventory[id]=(state.inventory[id]||0)+qty; }
-function removeItem(id, qty){ if((state.inventory[id]||0)<qty) return false; state.inventory[id]-=qty; if(state.inventory[id]<=0) delete state.inventory[id]; return true; }
-function hasItem(id, qty=1){ return (state.inventory[id]||0)>=qty || (state.bank[id]||0)>=qty; }
-function consumeFromInvOrBank(id,qty){ if((state.inventory[id]||0)>=qty) return removeItem(id,qty); const inv=state.inventory[id]||0; if(inv) removeItem(id,inv); const left=qty-inv; if((state.bank[id]||0)>=left){ state.bank[id]-=left; if(state.bank[id]<=0) delete state.bank[id]; return true; } return false; }
-function node(id){ return WORLD.cities[id] || WORLD.pois[id]; }
-function dist(a,b){ const A=node(a),B=node(b); return Math.hypot(A.x-B.x,A.y-B.y); }
-function travelMs(a,b){ const base = Math.max(8000, dist(a,b)*900); return base; }
-function routeAngle(a,b){ const A=node(a),B=node(b); return Math.atan2(B.y-A.y,B.x-A.x)*180/Math.PI; }
-function canAccess(location){ if(WORLD.cities[location]) return true; return !!state.completedQuests[location]; }
-function toolOk(act, ch){ if(!act.tool) return true; if(act.tool==='axe') return !!ch.equipment.axe; if(act.tool==='pickaxe') return !!ch.equipment.pickaxe; if(act.tool==='fishing_rod') return !!ch.equipment.fishing_rod; if(act.tool==='snare') return !!ch.equipment.snare; if(act.tool==='weapon') return !!ch.equipment.weapon; return true; }
-function startActivity(activityId, charId=state.characters[0].id, queue=false){ const ch=state.characters.find(c=>c.id===charId); const act=ACTIVITIES[activityId]; if(!act||!ch) return; if(!canAccess(act.city)){ toast(`${node(act.city).name} is locked by quest.`); return; } if(!toolOk(act,ch)){ toast(`Missing required tool: ${act.tool}`); return; }
-  if(act.consumes){ for(const [item,q] of act.consumes){ if(!hasItem(item,q)){ toast(`Need ${q} ${ITEMS[item]?.name||item}.`); return; } } }
-  const task = {id:uid(), activityId, phase:'travel', from:ch.location, to:act.city, startedAt:now(), endsAt: now()+ (ch.location===act.city? 600 : travelMs(ch.location,act.city))};
-  if(ch.activity){ const maxQueue = charterActive()?2:1; if(ch.queue.length>=maxQueue){ toast(`Queue full. Royal Charter gives +1 queue slot.`); return; } ch.queue.push(task); toast(`Queued: ${act.name}`); }
-  else { ch.activity=task; toast(`${ch.name} is heading to ${node(act.city).name}.`); }
-  save(); render(); }
-function charterActive(){ return state.expedition.charterUntil > now(); }
-function processTick(){ let changed=false; for(const ch of state.characters){ let guard=0; while(ch.activity && ch.activity.endsAt<=now() && guard++<5){ const task=ch.activity; const act=ACTIVITIES[task.activityId]; if(task.phase==='travel'){ ch.location=task.to; task.phase='work'; task.startedAt=now(); task.endsAt=now()+act.seconds*1000; addLog(`${ch.name} arrived at ${node(ch.location).name} and began ${act.name}.`); changed=true; }
-      else { completeActivity(ch,act); if(ch.queue.length){ ch.activity=ch.queue.shift(); if(ch.activity.from!==ch.location){ ch.activity.from=ch.location; ch.activity.startedAt=now(); ch.activity.endsAt=now()+travelMs(ch.location,ch.activity.to); ch.activity.phase='travel'; } else { ch.activity.startedAt=now(); ch.activity.endsAt=now()+600; ch.activity.phase='travel'; } } else { ch.activity=null; } changed=true; }
-    }
+fb.onAuthStateChanged(auth, (u) => {
+  user = u;
+  if (unsub) unsub();
+  if (!u) {
+    save = null;
+    renderLogin();
+    return;
   }
-  if(changed){ save(); render(); }
-}
-function completeActivity(ch,act){ if(act.rareCap){ const rn=state.rareNodes[act.name] || {count:0,readyAt:0}; if(rn.readyAt>now()){ addLog(`${act.name} is depleted for ${fmtTime(rn.readyAt-now())}.`); return; } rn.count++; if(rn.count>=act.rareCap){ rn.count=0; rn.readyAt=now()+act.rareRespawn; addLog(`${act.name} has depleted and will recover later.`); } state.rareNodes[act.name]=rn; }
-  if(act.consumes){ for(const [item,q] of act.consumes) consumeFromInvOrBank(item,q); }
-  state.skills[act.skill].xp += act.xp; const gained=[]; for(const y of act.yields||[]){ const [item,min,max]=y; const qty=min+Math.floor(Math.random()*(max-min+1)); if(qty>0){ addItem(item,qty); gained.push(`${qty} ${ITEMS[item]?.name||item}`); } }
-  if(act.mountChance && Math.floor(Math.random()*act.mountChance)===0){ state.mounts.push({id:uid(), species:'Elder Griffin', icon:'🦅', bondedAt:now(), speed:1.45, tradable:false}); gained.push('BONDED ELDER GRIFFIN MOUNT'); }
-  addLog(`${ch.name} completed ${act.name}: +${act.xp} ${act.skill} XP${gained.length?`, ${gained.join(', ')}`:''}.`);
-}
-setInterval(processTick,1000);
 
-function render(){ const app=document.getElementById('app'); if(!state.expedition.name){ app.innerHTML=CreateScreen(); bindCreate(); return; } app.innerHTML = Shell(); bind(); }
-function CreateScreen(){ return `<main class="hero"><section class="hero-card"><p class="tag">YOU PLAN. THEY LIVE.</p><h1 class="logo">Idle Legends<br/>Manager</h1><p class="small">Engine v0.0.1 — browser-only local build. This is the first playable shell of ILM.</p><div class="form"><input id="expName" placeholder="Expedition name" maxlength="24"/><input id="advName" placeholder="First adventurer name" maxlength="18" value="Rowan"/><div class="row"><button class="ghost" data-banner="Wolf">🐺 Wolf</button><button class="ghost" data-banner="Crown">👑 Crown</button><button class="ghost" data-banner="Oak">🌳 Oak</button></div><button class="primary" id="createBtn">Create Expedition</button><p class="small">Local save only for now. No Firebase gameplay writes. Built to be upgraded later.</p></div></section></main>`; }
-function bindCreate(){ let banner='Wolf'; document.querySelectorAll('[data-banner]').forEach(b=>b.onclick=()=>{banner=b.dataset.banner; toast('Banner selected');}); document.getElementById('createBtn').onclick=()=>{ const e=document.getElementById('expName').value.trim(); const a=document.getElementById('advName').value.trim()||'Rowan'; if(e.length<3){alert('Expedition name needs at least 3 characters.'); return;} state=defaultGame(); state.expedition.name=e; state.expedition.banner=banner; state.characters[0].name=a; addLog(`${e} was founded in Kingswatch.`); save(); render(); }; }
-function Shell(){ return `<div class="app-shell"><header class="topbar"><div class="brand"><div class="crest">${state.expedition.banner==='Crown'?'👑':state.expedition.banner==='Oak'?'🌳':'🐺'}</div><div><h1>${state.expedition.name}</h1><p>${charterActive()?'👑 Royal Charter':'🛡 Hardened'} • ${state.characters.length}/4 Members</p></div></div><div class="currencies"><span class="pill">🪙 ${state.expedition.gold}</span></div></header>${state.toast?`<div class="toast">${state.toast}</div>`:''}<main class="screen">${state.screen==='map'?MapScreen():state.screen==='expedition'?ExpeditionScreen():state.screen==='inventory'?InventoryScreen():state.screen==='skills'?SkillsScreen():MarketScreen()}</main><nav class="bottom-nav">${navBtn('map','🗺️','Map')}${navBtn('expedition','👥','Expedition')}${navBtn('skills','⭐','Skills')}${navBtn('inventory','🎒','Items')}${navBtn('market','🏦','Market')}</nav><section id="sheet" class="sheet"></section></div>`; }
-function navBtn(s,i,l){ return `<button class="nav-btn ${state.screen===s?'active':''}" data-screen="${s}">${i}<br>${l}</button>`; }
-function MapScreen(){ return `<section><div class="map-card"><div class="map-bg"></div><div class="river"></div>${roadsHtml()}${Object.entries(WORLD.cities).map(([id,c])=>locHtml(id,c,'city')).join('')}${Object.entries(WORLD.pois).map(([id,c])=>locHtml(id,c,'poi')).join('')}${otherHtml()}${charsHtml()}</div>${activeStatus()}</section><aside class="desktop-side hidden">${ExpeditionPanel()}</aside>`; }
-function roadsHtml(){ return WORLD.routes.map(([a,b])=>{const A=node(a),B=node(b); const len=Math.hypot(B.x-A.x,B.y-A.y); return `<div class="road" style="left:${A.x}%;top:${A.y}%;width:${len}%;transform:rotate(${routeAngle(a,b)}deg)"></div>`}).join(''); }
-function locHtml(id,c,cls){ return `<div class="${cls}" style="left:${c.x}%;top:${c.y}%"><button data-loc="${id}"><span class="name">${c.icon} ${c.name}</span><span class="lvl">${c.level}</span></button></div>`; }
-function charsHtml(){ return state.characters.map(ch=>{ let x=node(ch.location).x,y=node(ch.location).y; let line=''; if(ch.activity){ const A=node(ch.activity.from),B=node(ch.activity.to); const total=ch.activity.endsAt-ch.activity.startedAt; const pct= ch.activity.phase==='travel'? Math.min(1,Math.max(0,(now()-ch.activity.startedAt)/total)) : 1; x=A.x+(B.x-A.x)*pct; y=A.y+(B.y-A.y)*pct; if(ch.activity.phase==='travel'){ const len=Math.hypot(B.x-A.x,B.y-A.y)*pct; line=`<div class="pathline" style="left:${A.x}%;top:${A.y}%;width:${len}%;transform:rotate(${routeAngle(ch.activity.from,ch.activity.to)}deg)"></div>`; }} return `${line}<div class="char" style="left:${x}%;top:${y}%"><div class="char-token">${ch.icon}</div></div>`; }).join(''); }
-function otherHtml(){ const others=[['Raven Banner',66,37,'🧙'],['Ashen Company',58,72,'🛡️'],['Riverwatch',28,56,'🏹']]; return others.map(o=>`<div class="other" style="left:${o[1]}%;top:${o[2]}%"><div class="char-token">${o[3]}</div></div>`).join(''); }
-function activeStatus(){ const ch=state.characters[0]; const a=ch.activity?ACTIVITIES[ch.activity.activityId]:null; const pct=ch.activity?Math.min(100,((now()-ch.activity.startedAt)/(ch.activity.endsAt-ch.activity.startedAt))*100):0; return `<div class="status-card"><b>${ch.name}</b><p class="small">${a?`${ch.activity.phase==='travel'?'Traveling to':'Doing'} ${a.name}`:'Idle in '+node(ch.location).name}</p>${a?`<div class="progress"><div style="width:${pct}%"></div></div><p class="small">${fmtTime(ch.activity.endsAt-now())} remaining • Queue ${ch.queue.length}/${charterActive()?2:1}</p>`:`<button class="primary" data-loc="${ch.location}">Choose Activity</button>`}</div>`; }
-function ExpeditionPanel(){ return `<div class="card"><h2>Expedition</h2><p class="small">${state.expedition.hardened?'🛡 Hardened status active':'Hardened lost'}</p><p class="small">Royal Charter: ${charterActive()?fmtTime(state.expedition.charterUntil-now()):'Inactive'}</p></div>`; }
-function ExpeditionScreen(){ return `<section class="grid">${ExpeditionPanel()}${state.characters.map(ch=>`<div class="card member"><div class="avatar">${ch.icon}</div><div><b>${ch.name}</b><p class="small">${node(ch.location).name} • ${ch.activity?ACTIVITIES[ch.activity.activityId].name:'Idle'}</p><p class="small">HP ${ch.hp}/${ch.maxHp}</p></div></div>`).join('')}<div class="card"><h3>Activity Log</h3><div class="list">${state.log.slice(0,8).map(l=>`<p class="small">${new Date(l.t).toLocaleTimeString()} — ${l.msg}</p>`).join('')||'<p class="small">No history yet.</p>'}</div></div><button class="red" id="resetBtn">Reset Local Save</button></section>`; }
-function InventoryScreen(){ return `<section class="grid"><div class="card"><h2>Inventory</h2><div class="item-grid">${itemsHtml(state.inventory)}</div></div><div class="card"><h2>Bank</h2><div class="row"><button id="depositAll" class="primary">Deposit All</button><button id="withdrawAll" class="ghost">Withdraw All</button></div><div class="item-grid">${itemsHtml(state.bank)}</div></div><div class="card"><h2>Mount Stable</h2>${state.mounts.length?state.mounts.map(m=>`<p>${m.icon} ${m.species} <span class="small">Bonded • Not tradable • ${m.speed}x road speed</span></p>`).join(''):'<p class="small">No mounts yet. Common mounts and rare boss-bonded mounts will live here.</p>'}</div></section>`; }
-function itemsHtml(obj){ const entries=Object.entries(obj).filter(([,q])=>q>0); if(!entries.length) return '<p class="small">Empty</p>'; return entries.map(([id,q])=>`<div class="item"><b>${ITEMS[id]?.icon||'📦'} ${q}</b><span>${ITEMS[id]?.name||id}</span><br><span>${ITEMS[id]?.type||'Item'}</span></div>`).join(''); }
-function SkillsScreen(){ return `<section class="grid"><div class="card"><h2>Skills</h2><p class="small">Every skill will eventually have a skill tree. This build tracks XP/levels first.</p></div>${SKILLS.map(s=>{const xp=state.skills[s].xp,lvl=levelFromXp(xp);return `<div class="card"><b>${s}</b><div class="statline"><span>Level ${lvl}</span><span>${xp} XP</span></div><div class="progress"><div style="width:${Math.min(100,(xp%50)/50*100)}%"></div></div></div>`}).join('')}</section>`; }
-function MarketScreen(){ return `<section class="grid"><div class="card"><h2>Grand Market</h2><p class="small">Market is UI-only in this Spark build. Real listings, taxes, Hardened checks, and King's Seals require server functions later.</p></div><div class="card"><b>Design Rules</b><p class="small">No player-to-player direct trading. Everything goes through the market. Hardened is lost by market trading except King's Seals.</p></div><div class="card"><b>King's Seal</b><p class="small">Tradable premium item. Opening consumes it and adds 30 days of Royal Charter, stacking to 300 days.</p><button class="primary" id="demoSeal">Demo Activate Seal</button></div></section>`; }
-function bind(){ document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>{state.screen=b.dataset.screen; save(); render();}); document.querySelectorAll('[data-loc]').forEach(b=>b.onclick=()=>openLocation(b.dataset.loc)); const reset=document.getElementById('resetBtn'); if(reset) reset.onclick=()=>{if(confirm('Reset local ILM save?')){localStorage.removeItem(SAVE_KEY); state=defaultGame(); render();}}; const dep=document.getElementById('depositAll'); if(dep) dep.onclick=()=>{for(const [id,q] of Object.entries(state.inventory)){ if(id==='coins') continue; state.bank[id]=(state.bank[id]||0)+q; delete state.inventory[id];} save(); render();}; const wit=document.getElementById('withdrawAll'); if(wit) wit.onclick=()=>{for(const [id,q] of Object.entries(state.bank)){ state.inventory[id]=(state.inventory[id]||0)+q; delete state.bank[id];} save(); render();}; const seal=document.getElementById('demoSeal'); if(seal) seal.onclick=()=>{ const max=300*24*60*60*1000; const base=Math.max(now(),state.expedition.charterUntil); state.expedition.charterUntil=Math.min(now()+max,base+30*24*60*60*1000); addLog('A demo King\'s Seal was opened. Royal Charter time increased.'); save(); render();}; }
-function openLocation(id){ const l=node(id); const locked=!canAccess(id); const acts=(l.activities||[]).map(aid=>ACTIVITIES[aid]).filter(Boolean); const sheet=document.getElementById('sheet'); sheet.innerHTML=`<div class="sheet-head"><div><h2>${l.icon} ${l.name}</h2><p class="small">${l.desc}</p></div><button id="closeSheet">✕</button></div>${locked?`<div class="card locked"><b>Quest Locked</b><p class="small">${l.requires}</p><button class="primary" id="unlockDemo">Demo Complete Quest</button></div>`:''}<div class="grid">${acts.map(act=>activityCard(act,locked)).join('')}</div>`; sheet.classList.add('show'); document.getElementById('closeSheet').onclick=()=>sheet.classList.remove('show'); const unlock=document.getElementById('unlockDemo'); if(unlock) unlock.onclick=()=>{state.completedQuests[id]=true; addLog(`Quest completed: access to ${l.name} unlocked.`); save(); openLocation(id);}; document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>startActivity(b.dataset.act)); }
-function activityCard(act,locked){ const consumes=act.consumes?`Consumes: ${act.consumes.map(c=>`${c[1]} ${ITEMS[c[0]]?.name}`).join(', ')}`:''; const yields=act.yields?`Produces: ${act.yields.map(y=>ITEMS[y[0]]?.name||y[0]).join(', ')}`:''; return `<div class="card activity ${locked?'locked':''}"><div><strong>${act.combat?'⚔️':act.skill==='Mining'?'⛏️':act.skill==='Woodcutting'?'🪓':act.skill==='Fishing'?'🎣':'✨'} ${act.name}</strong><span>${act.skill} • ${act.seconds}s/action • +${act.xp} XP</span><span>${act.tool?`Requires ${act.tool}. `:''}${consumes}</span><span>${yields}</span><span>${act.desc}</span></div><button class="primary" data-act="${Object.keys(ACTIVITIES).find(k=>ACTIVITIES[k]===act)}" ${locked?'disabled':''}>Start</button></div>`; }
-render();
+  const ref = fb.doc(db, "users", u.uid);
+  unsub = fb.onSnapshot(ref, (snap) => {
+    save = snap.exists() ? snap.data() : null;
+    render();
+  }, (err) => {
+    console.error(err);
+    renderError("Could not load save. Check Firestore rules and Functions deployment.");
+  });
+});
+
+function renderLogin(){
+  if (tick) clearInterval(tick);
+  app.innerHTML = `
+    <section class="login">
+      <div class="loginCard">
+        <div class="bootMark">👑</div>
+        <h1>Idle Legends Manager</h1>
+        <p>A fantasy management MMO. Build an expedition, send adventurers across a living map, train skills, and grow from one nobody into a legendary company.</p>
+        <button id="google" class="primary">Continue with Google</button>
+        <div class="panel">
+          <input id="email" class="field" type="email" placeholder="Email"/>
+          <input id="pass" class="field" type="password" placeholder="Password"/>
+          <div class="split">
+            <button id="login" class="secondary">Login</button>
+            <button id="create" class="secondary">Create</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+  document.getElementById("google").onclick = async () => {
+    try { await fb.signInWithPopup(auth, googleProvider); }
+    catch { await fb.signInWithRedirect(auth, googleProvider); }
+  };
+  document.getElementById("login").onclick = () => fb.signInWithEmailAndPassword(auth, email.value, pass.value).catch(e => toast(e.message));
+  document.getElementById("create").onclick = () => fb.createUserWithEmailAndPassword(auth, email.value, pass.value).catch(e => toast(e.message));
+}
+
+function renderError(message){
+  app.innerHTML = `<section class="login"><div class="loginCard"><h1>Something went wrong</h1><p>${message}</p><button class="secondary" onclick="location.reload()">Reload</button></div></section>`;
+}
+
+function render(){
+  if (!user) return renderLogin();
+  if (!save) return renderCreateExpedition();
+  renderShell();
+  if (tick) clearInterval(tick);
+  tick = setInterval(updateLiveAction, 1000);
+  updateLiveAction();
+}
+
+function renderCreateExpedition(){
+  app.innerHTML = `
+    <section class="login">
+      <div class="loginCard">
+        <div class="bootMark">📜</div>
+        <h1>Create Expedition</h1>
+        <p>This is your account identity. Adventurers, bank, pets, achievements, Hardened status, and Royal Charter all belong to the expedition.</p>
+        <input id="expeditionName" class="field" maxlength="28" value="The Iron Wolves" placeholder="Expedition name"/>
+        <input id="adventurerName" class="field" maxlength="20" value="Rowan" placeholder="First adventurer"/>
+        <button id="begin" class="primary">Begin Journey</button>
+        <button id="logout" class="secondary">Logout</button>
+      </div>
+    </section>
+  `;
+  begin.onclick = async () => {
+    const expeditionName = expeditionNameInput().trim();
+    const adventurerName = adventurerNameInput().trim();
+    if (!expeditionName || !adventurerName) return toast("Name your expedition and first adventurer.");
+    try {
+      await call("createExpedition")({ expeditionName, adventurerName });
+      toast("Expedition created.");
+    } catch(e) { toast(e.message); }
+  };
+  logout.onclick = () => fb.signOut(auth);
+
+  function expeditionNameInput(){ return document.getElementById("expeditionName").value; }
+  function adventurerNameInput(){ return document.getElementById("adventurerName").value; }
+}
+
+function renderShell(){
+  app.innerHTML = `
+    <div class="shell">
+      <header class="top">
+        <div class="crest">👑</div>
+        <div class="title">
+          <b>${escapeHtml(save.expedition.name)}</b>
+          <span>${save.hardened ? "🛡️ Hardened" : "Market Expedition"}${isRoyal() ? " · 👑 Royal Charter" : ""}</span>
+        </div>
+        <div class="topRight">
+          <span class="pill">🪙 ${save.gold || 0}</span>
+          <span class="pill">👥 ${save.adventurers.length}/4</span>
+        </div>
+      </header>
+
+      <main class="screen" id="screen"></main>
+
+      <nav class="nav">
+        ${nav("map","🗺️","Map")}
+        ${nav("skills","📈","Skills")}
+        ${nav("items","🎒","Items")}
+        ${nav("quests","📜","Quests")}
+        ${nav("more","☰","More")}
+      </nav>
+
+      <div id="actionDock"></div>
+    </div>
+  `;
+  document.querySelectorAll(".nav button").forEach(btn => {
+    btn.onclick = () => {
+      tab = btn.dataset.tab;
+      renderShell();
+    };
+  });
+  renderTab();
+  renderActionDock();
+}
+
+function nav(id,icon,label){
+  return `<button data-tab="${id}" class="${tab===id?"active":""}"><i>${icon}</i><span>${label}</span></button>`;
+}
+
+function renderTab(){
+  if (tab === "map") renderMap();
+  if (tab === "skills") renderSkills();
+  if (tab === "items") renderItems();
+  if (tab === "quests") renderQuests();
+  if (tab === "more") renderMore();
+}
+
+function renderMap(){
+  const screen = document.getElementById("screen");
+  screen.innerHTML = `
+    <div class="mapFrame">
+      <div class="map">
+        ${renderRoads()}
+        ${Object.entries(GAME.cities).map(([id,c]) => `
+          <button class="city ${isLockedCity(id) ? "locked" : ""}" data-city="${id}" style="left:${c.x}%;top:${c.y}%">
+            <div class="ico">${c.icon}</div>
+            <b>${c.name}</b>
+            <span>${c.subtitle}</span>
+          </button>
+        `).join("")}
+        ${renderAdventurers()}
+        ${renderOtherExpeditions()}
+      </div>
+    </div>
+    ${renderCityPanel(selectedCity)}
+  `;
+
+  document.querySelectorAll(".city").forEach(btn => {
+    btn.onclick = () => {
+      selectedCity = btn.dataset.city;
+      renderMap();
+    };
+  });
+  bindActivityButtons();
+}
+
+function renderRoads(){
+  return GAME.roads.map(([a,b]) => {
+    const ca = GAME.cities[a], cb = GAME.cities[b];
+    const dx = cb.x - ca.x, dy = cb.y - ca.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    return `<div class="road" style="left:${ca.x}%;top:${ca.y}%;width:${len}%;transform:rotate(${ang}deg)"></div>`;
+  }).join("");
+}
+
+function renderAdventurers(){
+  return save.adventurers.map((a,i) => {
+    const pos = adventurerPosition(a);
+    return `<div class="marker" style="left:${pos.x}%;top:${pos.y}%">${["🧔","🧝","🧙","🛡️"][i] || "🙂"}</div>`;
+  }).join("");
+}
+
+function renderOtherExpeditions(){
+  const fake = [
+    {x:36,y:50,e:"🪓"},{x:63,y:50,e:"🌿"},{x:50,y:68,e:"🎣"},{x:29,y:50,e:"⚔️"},{x:70,y:44,e:"🐺"},{x:46,y:29,e:"⛏️"}
+  ];
+  return fake.map(f => `<div class="marker other" style="left:${f.x}%;top:${f.y}%">${f.e}</div>`).join("");
+}
+
+function adventurerPosition(a){
+  if (a.travel && a.travel.arriveAt > now()) {
+    const from = GAME.cities[a.travel.from];
+    const to = GAME.cities[a.travel.to];
+    const pct = Math.max(0, Math.min(1, (now() - a.travel.departAt) / (a.travel.arriveAt - a.travel.departAt)));
+    return { x: from.x + (to.x-from.x)*pct, y: from.y + (to.y-from.y)*pct };
+  }
+  const c = GAME.cities[a.location || "kingswatch"];
+  return { x: c.x, y: c.y };
+}
+
+function isLockedCity(id){
+  const lock = GAME.cities[id].lockedBy;
+  return !!lock && !(save.completedQuests || []).includes(lock);
+}
+
+function renderCityPanel(id){
+  const city = GAME.cities[id];
+  const locked = isLockedCity(id);
+  const q = city.lockedBy ? GAME.quests[city.lockedBy] : null;
+  return `
+    <section class="panel">
+      <h2>${city.icon} ${city.name}</h2>
+      <p class="muted">${city.subtitle}</p>
+      <p>${city.description}</p>
+      ${locked ? `
+        <div class="card">
+          <h3>🔒 Locked Area</h3>
+          <p>Requires quest: <b>${q.name}</b></p>
+          <p class="muted">Starts at ${q.origin}. Requires ${Object.entries(q.requirements).map(([s,l]) => `${skill(s).name} ${l}`).join(", ")}.</p>
+        </div>
+      ` : `
+        <div class="tabs"><button class="tab active">Activities</button><button class="tab">Services</button></div>
+        <div class="list">
+          ${city.activities.map(aid => activityRow(aid, id)).join("")}
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function activityRow(aid, cityId){
+  const a = GAME.activities[aid];
+  const toolText = a.requiredTool ? ` · Needs ${item(a.requiredTool).name}` : "";
+  const inputText = a.inputs?.length ? ` · Uses ${a.inputs.map(i => `${i.qty} ${item(i.item).name}`).join(", ")}` : "";
+  return `
+    <div class="row">
+      <div class="rowMain">
+        <b>${a.icon} ${a.name}</b>
+        <span>${a.description}</span>
+        <span>${a.category} · ${skill(a.skill).name} · ${a.actionSeconds}s/action${toolText}${inputText}</span>
+      </div>
+      <button class="small start" data-city="${cityId}" data-activity="${aid}">Start</button>
+    </div>
+  `;
+}
+
+function bindActivityButtons(){
+  document.querySelectorAll(".start").forEach(btn => {
+    btn.onclick = async () => {
+      try {
+        await call("startActivity")({
+          cityId: btn.dataset.city,
+          activityId: btn.dataset.activity,
+          adventurerId: save.adventurers[0].id
+        });
+        toast("Action started.");
+      } catch(e) { toast(e.message); }
+    };
+  });
+}
+
+function renderActionDock(){
+  const host = document.getElementById("actionDock");
+  if (!save.activeAction) {
+    host.innerHTML = "";
+    return;
+  }
+  const a = GAME.activities[save.activeAction.activityId];
+  host.innerHTML = `
+    <section class="actionDock">
+      <div class="actionHead">
+        <div>
+          <b>${a.icon} ${a.name}</b>
+          <div class="muted" id="actionSub">Updating...</div>
+        </div>
+        <button id="stopAction" class="small">Stop</button>
+      </div>
+      <div class="progress"><div class="bar" id="actionBar"></div></div>
+      <div class="kv">
+        <div><b>Runtime</b><span id="runtime">-</span></div>
+        <div><b>Hard Stop</b><span>8 real hours</span></div>
+        <div><b>XP/action</b><span>${a.xp} ${skill(a.skill).name}</span></div>
+        <div><b>Outputs</b><span>${describeOutputs(a)}</span></div>
+      </div>
+      <button id="collectAction" class="primary">Collect / Resolve Progress</button>
+      ${a.followUp ? `<button id="followUpAction" class="secondary">Queue Processing: ${GAME.activities[a.followUp].name}</button>` : ""}
+    </section>
+  `;
+
+  document.getElementById("stopAction").onclick = async () => {
+    try { await call("stopActivity")({}); toast("Action stopped."); }
+    catch(e) { toast(e.message); }
+  };
+  document.getElementById("collectAction").onclick = async () => {
+    try {
+      const res = await call("collectActivity")({});
+      toast(res.data?.message || "Progress resolved.");
+    } catch(e) { toast(e.message); }
+  };
+  const f = document.getElementById("followUpAction");
+  if (f) f.onclick = async () => {
+    try {
+      await call("startActivity")({
+        cityId: save.activeAction.cityId,
+        activityId: a.followUp,
+        adventurerId: save.activeAction.adventurerId
+      });
+      toast("Processing started.");
+    } catch(e) { toast(e.message); }
+  };
+}
+
+function updateLiveAction(){
+  if (!save?.activeAction) return;
+  const act = GAME.activities[save.activeAction.activityId];
+  const started = save.activeAction.startedAt;
+  const waiting = Math.max(0, started - now());
+  const elapsed = Math.max(0, now() - started);
+  const actionMs = act.actionSeconds * 1000;
+  const runtime = document.getElementById("runtime");
+  const sub = document.getElementById("actionSub");
+  const bar = document.getElementById("actionBar");
+  if (waiting > 0) {
+    if (runtime) runtime.textContent = "Traveling";
+    if (sub) sub.textContent = `Arrives in ${fmt(waiting)}`;
+    if (bar) bar.style.width = "0%";
+    return;
+  }
+  if (runtime) runtime.textContent = fmt(elapsed);
+  if (sub) sub.textContent = `Next action in ${fmt(actionMs - (elapsed % actionMs))}`;
+  if (bar) bar.style.width = `${((elapsed % actionMs) / actionMs) * 100}%`;
+}
+
+function describeOutputs(a){
+  const out = [];
+  if (a.goldMin) out.push("Gold");
+  (a.outputs || []).forEach(o => out.push(item(o.item).name));
+  return out.slice(0,3).join(", ") || "None";
+}
+
+function renderSkills(){
+  const entries = Object.entries(GAME.skills);
+  screen.innerHTML = `
+    <section class="panel">
+      <h2>Skills</h2>
+      <p class="muted">Sprint 1 includes skill XP, levels, and future tree descriptions. Full trees come after the activity foundation is stable.</p>
+    </section>
+    <section class="grid">
+      ${entries.map(([id,s]) => {
+        const xp = save.skills?.[id]?.xp || 0;
+        const lvl = level(xp);
+        const next = nextXp(lvl);
+        return `
+          <button class="card" data-skill="${id}">
+            <h3>${s.icon} ${s.name}</h3>
+            <p class="muted">Level ${lvl} · ${xp}/${next} XP</p>
+            <div class="progress"><div class="bar" style="width:${Math.min(100, xp/next*100)}%"></div></div>
+            <p>${s.purpose}</p>
+          </button>
+        `;
+      }).join("")}
+    </section>
+  `;
+}
+
+function renderItems(){
+  screen.innerHTML = `
+    <section class="panel">
+      <h2>Inventory</h2>
+      <p class="muted">Tools stay useful. Combat remains can be processed. Future gear and crafting will build on this item system.</p>
+      <div class="grid">${itemGrid(save.inventory)}</div>
+      <button id="depositAll" class="primary">Deposit All</button>
+    </section>
+    <section class="panel">
+      <h2>Bank</h2>
+      <div class="grid">${itemGrid(save.bank)}</div>
+    </section>
+  `;
+  document.querySelectorAll("[data-item]").forEach(btn => btn.onclick = () => showItem(btn.dataset.item));
+  document.getElementById("depositAll").onclick = async () => {
+    try { await call("depositAll")({}); toast("Deposited all."); }
+    catch(e) { toast(e.message); }
+  };
+}
+
+function itemGrid(bag){
+  const entries = Object.entries(bag || {}).filter(([,n]) => n > 0);
+  if (!entries.length) return `<p class="muted">Empty</p>`;
+  return entries.map(([id,n]) => `
+    <button class="card" data-item="${id}">
+      <h3>${item(id).icon} ${item(id).name}</h3>
+      <p class="muted">x${n}</p>
+    </button>
+  `).join("");
+}
+
+function showItem(id){
+  const it = item(id);
+  modal(`<h2>${it.icon} ${it.name}</h2><p class="muted">${it.type}</p><p>${it.description}</p>`);
+}
+
+function renderQuests(){
+  screen.innerHTML = `
+    <section class="panel">
+      <h2>Quests</h2>
+      <p class="muted">Sprint 1 uses quests to gate special map locations and bosses.</p>
+    </section>
+    <div class="list">
+      ${Object.entries(GAME.quests).map(([id,q]) => {
+        const done = (save.completedQuests || []).includes(id);
+        const can = Object.entries(q.requirements).every(([s,l]) => level(save.skills?.[s]?.xp || 0) >= l);
+        return `
+          <div class="row">
+            <div class="rowMain">
+              <b>${done ? "✅" : "📜"} ${q.name}</b>
+              <span>${q.description}</span>
+              <span>Origin: ${q.origin} · Unlocks ${q.unlocks} · Requires ${Object.entries(q.requirements).map(([s,l]) => `${skill(s).name} ${l}`).join(", ")}</span>
+            </div>
+            <button class="small quest" data-quest="${id}" ${done || !can ? "disabled" : ""}>${done ? "Done" : can ? "Complete" : "Locked"}</button>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+  document.querySelectorAll(".quest").forEach(btn => btn.onclick = async () => {
+    try { await call("completeQuest")({ questId: btn.dataset.quest }); toast("Quest completed."); }
+    catch(e) { toast(e.message); }
+  });
+}
+
+function renderMore(){
+  screen.innerHTML = `
+    <section class="panel">
+      <h2>Expedition</h2>
+      <p><b>${escapeHtml(save.expedition.name)}</b></p>
+      <p class="muted">${save.hardened ? "🛡️ Hardened. No gameplay market trades used." : "Market Expedition."}</p>
+      <p class="muted">Royal Charter: ${isRoyal() ? fmt(save.royalUntil - now()) + " remaining" : "Inactive"}</p>
+      <button id="openSeal" class="secondary">Open King's Seal</button>
+      <button id="logout" class="danger">Logout</button>
+    </section>
+    <section class="panel">
+      <h2>Grand Market</h2>
+      <p>All trading will go through the Grand Market. Direct player trading is intentionally rejected. King's Seals are the only trade that preserves Hardened.</p>
+      <button class="secondary" id="marketInfo">View Market Rules</button>
+    </section>
+    <section class="panel">
+      <h2>Expedition Log</h2>
+      <div class="list">${(save.log || []).slice(-16).reverse().map(l => `<div class="card"><b>${new Date(l.at).toLocaleString()}</b><p>${escapeHtml(l.text)}</p></div>`).join("") || `<p class="muted">No logs yet.</p>`}</div>
+    </section>
+  `;
+  document.getElementById("logout").onclick = () => fb.signOut(auth);
+  document.getElementById("marketInfo").onclick = () => modal(`<h2>Grand Market Rules</h2><p>No direct player trading. Gameplay item trades remove Hardened. King's Seals are exempt because they do not grant power.</p>`);
+  document.getElementById("openSeal").onclick = async () => {
+    try { await call("activateKingsSeal")({}); toast("Royal Charter extended."); }
+    catch(e) { toast(e.message); }
+  };
+}
+
+function isRoyal(){
+  return save.royalUntil && save.royalUntil > now();
+}
+
+function modal(html){
+  const shade = document.createElement("div");
+  shade.className = "modalShade";
+  shade.innerHTML = `<div class="modal">${html}<button class="primary" id="closeModal">Close</button></div>`;
+  document.body.appendChild(shade);
+  document.getElementById("closeModal").onclick = () => shade.remove();
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
