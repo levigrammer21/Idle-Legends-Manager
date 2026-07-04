@@ -1,8 +1,1 @@
-{
-  "name": "Idle Legends Manager",
-  "short_name": "ILM",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#07101b",
-  "theme_color": "#07101b"
-}
+{"name":"Idle Legends","short_name":"Idle Legends","start_url":"./index.html","display":"standalone","orientation":"landscape","background_color":"#07101b","theme_color":"#07101b"}

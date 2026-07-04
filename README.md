@@ -1,24 +1,19 @@
-# Idle Legends Manager — Alpha 0.5.1 Fixed Content
+# Idle Legends — Alpha 1 Foundation
 
-Root-level local playable build.
+Rebuilt around the real direction:
 
-This fixes the blank tab issue from 0.5.0 and keeps all gameplay local while Firebase Functions are pending.
+- Landscape-only MMO interface
+- Expedition manager fantasy
+- No personal inventory
+- Shared Expedition Stores
+- Roster/adventurer equipment
+- Individual adventurer HP and gear
+- HP starts at 10 and regenerates passively
+- Buildings/activities instead of floating action bubbles
+- Global crafting recipes
+- Collapsible current action bar
+- OSRS-style chat/log panel
+- Area quests hidden in Quest Log dropdowns
+- Map + center info + side management panel
 
-## Included
-- Version stamp
-- Local save
-- World map
-- Skills
-- Gear
-- Inventory
-- Bank
-- Crafting
-- Area quests
-- Bosses
-- Combat
-- Processing
-- Pets
-- Mounts
-- Market UI
-- Hardened rules
-- Placeholder icons ready to replace with custom PNGs later
+Artwork is placeholder emoji for now.
