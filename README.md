@@ -1,33 +1,46 @@
-# Idle Legends Manager — Sprint 2 Complete Root Build
+# Idle Legends Manager — Sprint 3 Complete Root Build
 
 Upload all files to GitHub repo root.
 
-## Sprint 2 adds
+## Sprint 3 adds
 
-- Equipment screen
-- Equipment slots: weapon, body, active tool
-- Equip/unequip through Cloud Functions
-- Crafting screen
-- Location-based recipes
-- Server-authoritative crafting
-- Crafting consumes inputs from inventory/bank
-- Crafting grants skill XP
-- Tool upgrade chain
-- Low-tier item sink examples:
-  - Copper Axe requires Copper Bars + Oak Log + Crude Axe
-  - Copper Pickaxe requires Copper Bars + Oak Log + Cracked Pickaxe
-- Fletching recipe
-- Tailoring recipe
-- Cooking recipe
-- Copper resource loop
-- Better city services and local recipes
-- Sprint 1 systems preserved
+- Real combat foundation
+- Enemy stat definitions
+- HP system
+- Max HP calculation
+- Weapon/armor combat stats
+- Hit chance simulation
+- Enemy damage simulation
+- Automatic food usage
+- Defeat/death stopping rules
+- Partial HP recovery after defeat
+- Monster Mastery XP from kills
+- Boss component drops
+- Griffin 1/1000 mount-bond backend hook
+- Combat preview in activity panels
+- Combat status UI
+- Sprint 1 and Sprint 2 systems preserved
 
-## Deploy after upload
+## Firestore rules
+
+`firestore.rules` belongs in GitHub as source control, but it must also be deployed/applied in Firebase to actually protect the database.
+
+Manual mobile path:
+
+Firebase Console → Firestore Database → Rules → paste `firestore.rules` → Publish
+
+Automated later:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+## Functions deploy
+
+After upload:
 
 ```bash
 npm install
-firebase deploy --only firestore:rules
 firebase deploy --only functions
 ```
 
