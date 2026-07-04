@@ -4,39 +4,15 @@
     "ignore": [
       "firebase.json",
       "firestore.rules",
-      "firestore.indexes.json",
-      "server.js",
-      "serverGameData.js",
-      "package.json",
-      "package-lock.json",
       "README.md",
       "**/.*",
       "**/node_modules/**"
     ],
     "rewrites": [
-      { "source": "**", "destination": "/index.html" }
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ]
-  },
-  "functions": {
-    "source": ".",
-    "runtime": "nodejs20",
-    "ignore": [
-      "index.html",
-      "styles.css",
-      "app.js",
-      "firebase.js",
-      "gameData.js",
-      "manifest.json",
-      "README.md",
-      "firestore.rules",
-      "firestore.indexes.json",
-      "firebase.json",
-      ".git",
-      "node_modules"
-    ]
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
   }
 }
