@@ -1,4 +1,4 @@
-# Idle Legends Manager — Sprint 3 Complete Root Build
+# Idle Legends Manager — Alpha 0.3.1 Build Stamp Update
 
 Upload all files to GitHub repo root.
 
@@ -49,3 +49,11 @@ If using Firebase Hosting:
 ```bash
 firebase deploy --only hosting
 ```
+
+
+## Alpha 0.3.1 update
+
+- Adds permanent visible build stamp to login screen.
+- Adds build stamp to expedition creation screen.
+- Adds client version to top bar after login.
+- Build ID: ILM-A0.3.1-S3-STAMP

@@ -1,5 +1,9 @@
 export const GAME = {
-  version: "sprint-3-combat-complete",
+  version: "0.3.1",
+  sprint: "Sprint 3",
+  buildName: "Sprint 3 Build Stamp Update",
+  buildDate: "2026-07-04",
+  buildId: "ILM-A0.3.1-S3-STAMP",
   maxActionMs: 8 * 60 * 60 * 1000,
 
   skills: {

@@ -24,6 +24,15 @@ const fmt = (ms) => {
 };
 const qty = (bag,id) => Number(bag?.[id] || 0);
 
+function buildStamp(){
+  return `
+    <div class="buildStamp">
+      <b>Alpha ${GAME.version}</b>
+      <span>${GAME.sprint || "Sprint"} · ${GAME.buildId || "local"}</span>
+    </div>
+  `;
+}
+
 function toast(text){
   document.querySelector(".toast")?.remove();
   const el = document.createElement("div");
@@ -59,7 +68,7 @@ function renderLogin(){
       <div class="loginCard">
         <div class="bootMark">👑</div>
         <h1>Idle Legends Manager</h1>
-        <p>A fantasy management MMO. Build an expedition, send adventurers across a living map, train skills, and grow from one nobody into a legendary company.</p>
+        <p>A fantasy management MMO. Build an expedition, send adventurers across a living map, train skills, and grow from one nobody into a legendary company.</p>${buildStamp()}
         <button id="google" class="primary">Continue with Google</button>
         <div class="panel">
           <input id="email" class="field" type="email" placeholder="Email"/>
@@ -99,7 +108,7 @@ function renderCreateExpedition(){
       <div class="loginCard">
         <div class="bootMark">📜</div>
         <h1>Create Expedition</h1>
-        <p>This is your account identity. Adventurers, bank, pets, achievements, Hardened status, and Royal Charter all belong to the expedition.</p>
+        <p>This is your account identity. Adventurers, bank, pets, achievements, Hardened status, and Royal Charter all belong to the expedition.</p>${buildStamp()}
         <input id="expeditionName" class="field" maxlength="28" value="The Iron Wolves" placeholder="Expedition name"/>
         <input id="adventurerName" class="field" maxlength="20" value="Rowan" placeholder="First adventurer"/>
         <button id="begin" class="primary">Begin Journey</button>
@@ -129,11 +138,11 @@ function renderShell(){
         <div class="crest">👑</div>
         <div class="title">
           <b>${escapeHtml(save.expedition.name)}</b>
-          <span>${save.hardened ? "🛡️ Hardened" : "Market Expedition"}${isRoyal() ? " · 👑 Royal Charter" : ""}</span>
+          <span>${save.hardened ? "🛡️ Hardened" : "Market Expedition"}${isRoyal() ? " · 👑 Royal Charter" : ""} · v${GAME.version}</span>
         </div>
         <div class="topRight">
           <span class="pill">🪙 ${save.gold || 0}</span>
-          <span class="pill">👥 ${save.adventurers.length}/4</span>
+          <span class="pill">❤️ ${save.hp || 30}/${calcMaxHp()}</span><span class="pill">👥 ${save.adventurers.length}/4</span>
         </div>
       </header>
 
@@ -276,7 +285,7 @@ function activityRow(aid, cityId){
       <div class="rowMain">
         <b>${a.icon} ${a.name}</b>
         <span>${a.description}</span>
-        <span>${a.category} · ${skill(a.skill).name} · ${a.actionSeconds}s/action${toolText}${inputText}</span>
+        <span>${a.category} · ${skill(a.skill).name} · ${a.actionSeconds}s/action${toolText}${inputText}</span>${combatPreview(a)}
       </div>
       <button class="small start" data-city="${cityId}" data-activity="${aid}">Start</button>
     </div>
@@ -490,6 +499,7 @@ function renderGear(){
       <p class="muted">Sprint 2 adds permanent gear foundation. Sprint 3 will connect this to combat math.</p>
       <div class="grid">${slots}</div>
     </section>
+    <section class="panel"><h2>Combat Status</h2><div class="kv"><div><b>HP</b><span>${save.hp || calcMaxHp()}/${calcMaxHp()}</span></div><div><b>Food</b><span>${qty(save.inventory,"cookedMinnow")+qty(save.bank,"cookedMinnow")} Cooked Minnow</span></div><div><b>Weapon</b><span>${save.equipment?.weapon ? item(save.equipment.weapon).name : "None"}</span></div><div><b>Armor</b><span>${save.equipment?.body ? item(save.equipment.body).name : "None"}</span></div></div><p class="muted">Food is consumed automatically in combat when HP is low. If defeated, action stops and HP recovers partially.</p></section>
     <section class="panel">
       <h2>Equip Items</h2>
       <div class="list">${equippables || `<p class="muted">No equippable items available.</p>`}</div>
@@ -604,6 +614,25 @@ function renderMore(){
     try { await call("activateKingsSeal")({}); toast("Royal Charter extended."); }
     catch(e) { toast(e.message); }
   };
+}
+
+function calcMaxHp(){
+  const melee = level(save.skills?.melee?.xp || 0);
+  const ranged = level(save.skills?.ranged?.xp || 0);
+  const magic = level(save.skills?.magic?.xp || 0);
+  return 30 + Math.floor((melee + ranged + magic) / 3) * 3;
+}
+
+function combatPreview(activity){
+  if (!activity.enemy) return "";
+  const e = GAME.enemies[activity.enemy];
+  if (!e) return "";
+  const weapon = GAME.items[save.equipment?.weapon] || {};
+  const armor = GAME.items[save.equipment?.body] || {};
+  const lvl = level(save.skills?.[activity.skill]?.xp || 0);
+  const accuracy = Math.round(55 + lvl * 1.2 + (weapon.accuracy || 0));
+  const power = lvl + (weapon.power || 1);
+  return `<span>Enemy: ${e.icon} ${e.name} · HP ${e.hp} · Max hit ${e.damage[1]}</span><span>Your power ${power} · hit chance about ${accuracy}% · Armor ${armor.defense || 0}</span>`;
 }
 
 function isRoyal(){
