@@ -142,8 +142,8 @@ function renderShell(){
       <nav class="nav">
         ${nav("map","🗺️","Map")}
         ${nav("skills","📈","Skills")}
-        ${nav("items","🎒","Items")}
-        ${nav("quests","📜","Quests")}
+        ${nav("gear","🧰","Gear")}
+        ${nav("craft","⚒️","Craft")}
         ${nav("more","☰","More")}
       </nav>
 
@@ -167,8 +167,8 @@ function nav(id,icon,label){
 function renderTab(){
   if (tab === "map") renderMap();
   if (tab === "skills") renderSkills();
-  if (tab === "items") renderItems();
-  if (tab === "quests") renderQuests();
+  if (tab === "gear") renderGear();
+  if (tab === "craft") renderCraft();
   if (tab === "more") renderMore();
 }
 
@@ -261,6 +261,7 @@ function renderCityPanel(id){
         <div class="list">
           ${city.activities.map(aid => activityRow(aid, id)).join("")}
         </div>
+        ${(city.recipes || []).length ? `<div class="panel" style="margin-top:12px"><h3>Local Recipes</h3><p class="muted">Open Craft tab to use ${city.name} recipes.</p>${city.recipes.map(rid => `<div class="card"><b>${GAME.recipes[rid].icon} ${GAME.recipes[rid].name}</b><p class="muted">${GAME.recipes[rid].description}</p></div>`).join("")}</div>` : ""}
       `}
     </section>
   `;
@@ -466,6 +467,113 @@ function renderQuests(){
   });
 }
 
+
+function renderGear(){
+  const eq = save.equipment || {};
+  const slots = Object.entries(GAME.equipmentSlots).map(([slot,label]) => {
+    const id = eq[slot];
+    return `<div class="card"><h3>${label}</h3><p>${id ? `${item(id).icon} ${item(id).name}` : "Empty"}</p>${id ? `<button class="small unequip" data-slot="${slot}">Unequip</button>` : ""}</div>`;
+  }).join("");
+
+  const owned = {};
+  for (const [id,n] of Object.entries(save.inventory || {})) owned[id] = (owned[id] || 0) + n;
+  for (const [id,n] of Object.entries(save.bank || {})) owned[id] = (owned[id] || 0) + n;
+
+  const equippables = Object.entries(owned)
+    .filter(([id,n]) => n > 0 && GAME.items[id]?.slot)
+    .map(([id,n]) => `<div class="row"><div class="rowMain"><b>${item(id).icon} ${item(id).name}</b><span>${item(id).description}</span><span>Owned: ${n} · Slot: ${GAME.items[id].slot}</span></div><button class="small equip" data-equip="${id}">Equip</button></div>`)
+    .join("");
+
+  screen.innerHTML = `
+    <section class="panel">
+      <h2>Equipment</h2>
+      <p class="muted">Sprint 2 adds permanent gear foundation. Sprint 3 will connect this to combat math.</p>
+      <div class="grid">${slots}</div>
+    </section>
+    <section class="panel">
+      <h2>Equip Items</h2>
+      <div class="list">${equippables || `<p class="muted">No equippable items available.</p>`}</div>
+    </section>
+    <section class="panel">
+      <h2>Inventory</h2>
+      <div class="grid">${itemGrid(save.inventory)}</div>
+      <button id="depositAll" class="primary">Deposit All</button>
+    </section>
+    <section class="panel">
+      <h2>Bank</h2>
+      <div class="grid">${itemGrid(save.bank)}</div>
+    </section>
+  `;
+
+  document.querySelectorAll("[data-item]").forEach(btn => btn.onclick = () => showItem(btn.dataset.item));
+  document.querySelectorAll(".equip").forEach(btn => btn.onclick = async () => {
+    try { await call("equipItem")({ itemId: btn.dataset.equip }); toast("Equipped."); }
+    catch(e) { toast(e.message); }
+  });
+  document.querySelectorAll(".unequip").forEach(btn => btn.onclick = async () => {
+    try { await call("unequipItem")({ slot: btn.dataset.slot }); toast("Unequipped."); }
+    catch(e) { toast(e.message); }
+  });
+  document.getElementById("depositAll").onclick = async () => {
+    try { await call("depositAll")({}); toast("Deposited all."); }
+    catch(e) { toast(e.message); }
+  };
+}
+
+function renderCraft(){
+  const city = GAME.cities[selectedCity] || GAME.cities.kingswatch;
+  const recipes = city.recipes || [];
+  screen.innerHTML = `
+    <section class="panel">
+      <h2>Crafting</h2>
+      <p class="muted">Crafting is location-based. Current crafting city: <b>${city.name}</b>. Select another city on the map to change available stations.</p>
+    </section>
+    <section class="panel">
+      <h2>${city.icon} ${city.name} Recipes</h2>
+      <div class="list">${recipes.map(recipeRow).join("") || `<p class="muted">No recipes available here yet.</p>`}</div>
+    </section>
+  `;
+  document.querySelectorAll(".craftRecipe").forEach(btn => btn.onclick = async () => {
+    try { await call("craftRecipe")({ recipeId: btn.dataset.recipe, cityId: selectedCity }); toast("Crafted."); }
+    catch(e) { toast(e.message); }
+  });
+}
+
+function recipeRow(id){
+  const r = GAME.recipes[id];
+  const skillLvl = level(save.skills?.[r.skill]?.xp || 0);
+  const canLevel = skillLvl >= r.level;
+  const hasInputs = r.inputs.every(input => qty(save.inventory,input.item) + qty(save.bank,input.item) >= input.qty);
+  return `
+    <div class="row">
+      <div class="rowMain">
+        <b>${r.icon} ${r.name}</b>
+        <span>${r.description}</span>
+        <span>${skill(r.skill).name} ${r.level} · ${r.seconds}s · ${r.xp} XP · Station: ${r.station}</span>
+        <span>Needs: ${r.inputs.map(i => `${i.qty} ${item(i.item).name}`).join(", ")} → Makes: ${r.outputs.map(o => `${o.qty} ${item(o.item).name}`).join(", ")}</span>
+      </div>
+      <button class="small craftRecipe" data-recipe="${id}" ${(!canLevel || !hasInputs) ? "disabled" : ""}>${!canLevel ? "Level" : !hasInputs ? "Items" : "Craft"}</button>
+    </div>
+  `;
+}
+
+function questRows(){
+  return Object.entries(GAME.quests).map(([id,q]) => {
+    const done = (save.completedQuests || []).includes(id);
+    const can = Object.entries(q.requirements).every(([s,l]) => level(save.skills?.[s]?.xp || 0) >= l);
+    return `
+      <div class="row">
+        <div class="rowMain">
+          <b>${done ? "✅" : "📜"} ${q.name}</b>
+          <span>${q.description}</span>
+          <span>Origin: ${q.origin} · Unlocks ${q.unlocks} · Requires ${Object.entries(q.requirements).map(([s,l]) => `${skill(s).name} ${l}`).join(", ")}</span>
+        </div>
+        <button class="small quest" data-quest="${id}" ${done || !can ? "disabled" : ""}>${done ? "Done" : can ? "Complete" : "Locked"}</button>
+      </div>`;
+  }).join("");
+}
+
+
 function renderMore(){
   screen.innerHTML = `
     <section class="panel">
@@ -480,6 +588,10 @@ function renderMore(){
       <h2>Grand Market</h2>
       <p>All trading will go through the Grand Market. Direct player trading is intentionally rejected. King's Seals are the only trade that preserves Hardened.</p>
       <button class="secondary" id="marketInfo">View Market Rules</button>
+    </section>
+    <section class="panel">
+      <h2>Quests</h2>
+      <div class="list">${questRows()}</div>
     </section>
     <section class="panel">
       <h2>Expedition Log</h2>
@@ -509,3 +621,10 @@ function modal(html){
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
+
+document.addEventListener("click", async (e) => {
+  const q = e.target.closest(".quest");
+  if (!q) return;
+  try { await call("completeQuest")({ questId: q.dataset.quest }); toast("Quest completed."); }
+  catch(err) { toast(err.message); }
+});

@@ -103,6 +103,33 @@ function resolveActiveAction(state){
   return { actions: actual, stopped: false, message: `Resolved ${actual} actions.` };
 }
 
+
+function takeItems(state, inputs){
+  state.inventory = state.inventory || {};
+  state.bank = state.bank || {};
+  for (const input of inputs) {
+    const total = Number(state.inventory[input.item] || 0) + Number(state.bank[input.item] || 0);
+    if (total < input.qty) {
+      const name = GAME.items[input.item]?.name || input.item;
+      throw new HttpsError("failed-precondition", `Requires ${input.qty} ${name}.`);
+    }
+  }
+  for (const input of inputs) {
+    let remaining = input.qty;
+    const fromInventory = Math.min(remaining, Number(state.inventory[input.item] || 0));
+    if (fromInventory) {
+      inc(state.inventory, input.item, -fromInventory);
+      remaining -= fromInventory;
+    }
+    if (remaining) inc(state.bank, input.item, -remaining);
+  }
+}
+
+function giveItems(state, outputs){
+  state.inventory = state.inventory || {};
+  for (const output of outputs) inc(state.inventory, output.item, output.qty);
+}
+
 function validateCanStart(state, cityId, activityId){
   const city = GAME.cities[cityId];
   const activity = GAME.activities[activityId];
@@ -157,6 +184,7 @@ exports.createExpedition = onCall({ region: "us-central1" }, async (req) => {
       gold: 50,
       inventory: { ...GAME.starterInventory },
       bank: {},
+      equipment: { ...GAME.starterEquipment },
       skills: initialSkills(),
       completedQuests: [],
       hardened: true,
@@ -319,6 +347,105 @@ exports.activateKingsSeal = onCall({ region: "us-central1" }, async (req) => {
     state.royalUntil = Math.min(base + 30 * 24 * 60 * 60 * 1000, now() + GAME.charterMaxMs);
     state.updatedAt = now();
     addLog(state, "Opened a King's Seal. Royal Charter extended.");
+    tx.set(ref, state);
+  });
+
+  return { ok: true };
+});
+
+
+exports.craftRecipe = onCall({ region: "us-central1" }, async (req) => {
+  const uid = requireUid(req);
+  const { recipeId, cityId } = req.data || {};
+  const recipe = GAME.recipes[recipeId];
+  const city = GAME.cities[cityId];
+
+  if (!recipe) throw new HttpsError("invalid-argument", "Unknown recipe.");
+  if (!city) throw new HttpsError("invalid-argument", "Unknown city.");
+  if (!(city.recipes || []).includes(recipeId)) throw new HttpsError("failed-precondition", "That recipe is not available here.");
+
+  const ref = userRef(uid);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Create expedition first.");
+    const state = snap.data();
+    resolveActiveAction(state);
+
+    const lvl = levelFromXp(state.skills?.[recipe.skill]?.xp || 0);
+    if (lvl < recipe.level) {
+      const name = GAME.skills[recipe.skill]?.name || recipe.skill;
+      throw new HttpsError("failed-precondition", `Requires ${name} ${recipe.level}.`);
+    }
+
+    takeItems(state, recipe.inputs);
+    giveItems(state, recipe.outputs);
+
+    state.skills[recipe.skill] = state.skills[recipe.skill] || { xp: 0 };
+    state.skills[recipe.skill].xp = Number(state.skills[recipe.skill].xp || 0) + recipe.xp;
+
+    state.updatedAt = now();
+    addLog(state, `Crafted: ${recipe.name}.`);
+    tx.set(ref, state);
+  });
+
+  return { ok: true };
+});
+
+exports.equipItem = onCall({ region: "us-central1" }, async (req) => {
+  const uid = requireUid(req);
+  const itemId = req.data?.itemId;
+  const item = GAME.items[itemId];
+  if (!item || !item.slot) throw new HttpsError("invalid-argument", "Item cannot be equipped.");
+
+  const ref = userRef(uid);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Create expedition first.");
+    const state = snap.data();
+    resolveActiveAction(state);
+
+    state.inventory = state.inventory || {};
+    state.bank = state.bank || {};
+    state.equipment = state.equipment || {};
+
+    if (has(state.inventory, itemId)) inc(state.inventory, itemId, -1);
+    else if (has(state.bank, itemId)) inc(state.bank, itemId, -1);
+    else throw new HttpsError("failed-precondition", "You do not own that item.");
+
+    const old = state.equipment[item.slot];
+    if (old) inc(state.inventory, old, 1);
+    state.equipment[item.slot] = itemId;
+
+    state.updatedAt = now();
+    addLog(state, `Equipped: ${item.name}.`);
+    tx.set(ref, state);
+  });
+
+  return { ok: true };
+});
+
+exports.unequipItem = onCall({ region: "us-central1" }, async (req) => {
+  const uid = requireUid(req);
+  const slot = req.data?.slot;
+  if (!["weapon","body","tool"].includes(slot)) throw new HttpsError("invalid-argument", "Invalid slot.");
+
+  const ref = userRef(uid);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Create expedition first.");
+    const state = snap.data();
+    resolveActiveAction(state);
+
+    state.inventory = state.inventory || {};
+    state.equipment = state.equipment || {};
+    const old = state.equipment[slot];
+    if (!old) throw new HttpsError("failed-precondition", "Nothing equipped there.");
+
+    inc(state.inventory, old, 1);
+    state.equipment[slot] = null;
+
+    state.updatedAt = now();
+    addLog(state, `Unequipped: ${GAME.items[old]?.name || old}.`);
     tx.set(ref, state);
   });
 
