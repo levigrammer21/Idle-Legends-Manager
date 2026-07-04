@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function ownsUser(userId) { return signedIn() && request.auth.uid == userId; }
+
+    match /users/{userId} {
+      allow read: if ownsUser(userId);
+      allow create: if ownsUser(userId)
+        && request.resource.data.keys().hasOnly(['createdAt','displayName','email','expeditionId','lastLoginAt'])
+        && request.resource.data.expeditionId == null;
+      allow update: if ownsUser(userId)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['displayName','lastLoginAt']);
+      allow delete: if false;
+    }
+
+    match /expeditions/{expeditionId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /characters/{characterId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /banks/{userId} {
+      allow read: if ownsUser(userId);
+      allow write: if false;
+    }
+
+    match /inventories/{characterId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /marketListings/{listingId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /worldState/{docId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /gameContent/{document=**} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

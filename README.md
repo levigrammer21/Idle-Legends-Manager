@@ -1,26 +1,53 @@
-# Idle Legends Manager Engine v0.0.1
+# Idle Legends Manager
 
-Playable browser-only local build.
+Production-oriented Blaze build foundation.
 
-## What it includes
-- Mobile-first UI shell
+## Current Build
+
+Version: `0.1.0-dream-foundation`
+
+This is not a static mockup. It is a Firebase-backed project foundation:
+
+- React + Vite mobile-first client
+- Firebase Auth email/password + Google
+- Firestore read model
+- Cloud Functions server-authoritative gameplay actions
+- Firestore rules blocking direct gameplay writes
 - Expedition creation
 - First adventurer
-- Living world map layout
-- Central hub + four major cities + locked points of interest
-- Local travel animation
-- Activity system
-- Queue system, including Royal Charter +1 queue demo
-- Skills: Woodcutting, Mining, Fishing, Gathering, Hunting, Processing, Smithing, Fletching, Cooking, Tailoring, Crafting, Melee, Ranged, Magic, Monster Mastery
-- Inventory and bank
-- Processing loop after combat
-- Rare resource depletion design hooks
-- King's Seal / Royal Charter demo
-- Hardened status text
-- Local browser save via localStorage
+- World map
+- Cities and locked areas
+- Skills
+- Items
+- Activities
+- Combat starter loop
+- Processing loop
+- Bank/inventory
+- King's Seal / Royal Charter server function
+- Hardened market rule documented in UI
 
-## How to run
-Open `index.html` in a browser.
+## GitHub Hosting First
+
+If hosting with GitHub Pages for now:
+
+1. Upload the whole repo to GitHub.
+2. In GitHub repo settings, enable Pages.
+3. Firebase Console > Authentication > Settings > Authorized domains.
+4. Add your GitHub Pages domain.
+
+For GitHub Pages, Vite may need a `base` path if your project is hosted at `username.github.io/repo-name` instead of a custom domain. If the page loads blank after deployment, tell me your GitHub Pages URL and I will set the exact `base` value.
+
+## Firebase Deploy Later
+
+When ready to deploy Firebase Hosting and Functions:
+
+```bash
+npm install
+cd functions && npm install && cd ..
+npm run build
+firebase deploy
+```
 
 ## Important
-This is intentionally not online-authoritative yet. It does not write gameplay data to Firebase. It is structured as a playable shell so the save layer can later be replaced by Firestore and Cloud Functions.
+
+Cloud Functions are the game engine. The client does not directly write XP, drops, inventory, gold, or progression.
