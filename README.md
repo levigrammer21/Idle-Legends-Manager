@@ -1,7 +1,9 @@
-# Idle Legends Alpha 1.6 — OSRS Mobile Reset
+# Idle Legends Alpha 1.7 — Scratch OSRS Mobile
 
 Root-level only.
 
-To remove the browser bar on Android: Chrome menu → Add to Home screen / Install app → launch from the new icon.
+Upload every file in this zip to repo root.
 
-A normal browser tab will always show the address bar.
+Install as app / Add to Home Screen to remove browser bar.
+
+Every menu minimizes: chat, area panel, right panel.
