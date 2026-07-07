@@ -1,6 +1,6 @@
 # Changed Files
 
-Upload all root files after deleting old repo contents.
+Upload all files to repo root after deleting old contents.
 
 - index.html
 - styles.css

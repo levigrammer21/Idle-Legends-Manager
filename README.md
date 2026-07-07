@@ -1,9 +1,7 @@
-# Idle Legends Alpha 1.7 — Scratch OSRS Mobile
+# Idle Legends Alpha 2.0 — Playable Root Build
 
-Root-level only.
+Root-level only. Upload every file in this zip to the repo root.
 
-Upload every file in this zip to repo root.
+This redesign uses Melvor-style playable systems with OSRS mobile rails.
 
-Install as app / Add to Home Screen to remove browser bar.
-
-Every menu minimizes: chat, area panel, right panel.
+To remove the browser bar: Chrome menu → Add to Home screen / Install app → launch from the home-screen icon.
