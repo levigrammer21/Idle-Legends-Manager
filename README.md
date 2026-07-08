@@ -1,7 +1,15 @@
-# Idle Legends Alpha 3.0 — Keeper Foundation
+# Idle Legends Alpha 3.1 — Combat, Recruit, Travel
 
-Root-level code/config/docs. The only folder is `images/`, and all art placeholders are inside it.
+Root-level code/config/docs. The only folder is `images/`.
 
-Upload all files/folders from this zip to repo root.
-
-Includes portrait mobile UI, shared bank, equipment, combat, gathering, processing, crafting, market, quests, locked areas, achievements, pets, mount support, world log, HP regen, and persistent actions.
+Major systems update:
+- Recruit first adventurer instead of starting with one
+- Multiple adventurer support and selection
+- Travel timers between areas
+- Combat rebuilt with Attack, Strength, Defense, hit chance, armor, enemy HP, per-hit combat log
+- HP minimum recovery is 10
+- Corpse drops after combat
+- Processing corpses into materials
+- Skill actions require correct equipped tools
+- Combat requires equipped weapon
+- Equipment affects stats
