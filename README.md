@@ -13,3 +13,9 @@ Major systems update:
 - Skill actions require correct equipped tools
 - Combat requires equipped weapon
 - Equipment affects stats
+
+
+Patch 3.1.1:
+- Fixed missing recruit() handler.
+- Recruit buttons now work.
+- Prevents the UI from breaking after tapping Recruit.
