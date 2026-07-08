@@ -1,11 +1,11 @@
 # Changed Files
 
-Upload all root files after deleting old contents.
+Upload everything in this zip.
 
+Root files:
 - index.html
 - styles.css
 - app.js
-- placeholder.png
 - manifest.json
 - firebase.json
 - firestore.rules
@@ -14,3 +14,6 @@ Upload all root files after deleting old contents.
 - README.md
 - CHANGED_FILES.md
 - .nojekyll
+
+Only folder:
+- images/

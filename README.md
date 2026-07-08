@@ -1,7 +1,7 @@
-# Idle Legends Alpha 2.1 — Vertical Playable
+# Idle Legends Alpha 3.0 — Keeper Foundation
 
-Root-level only. Upload every file to repo root.
+Root-level code/config/docs. The only folder is `images/`, and all art placeholders are inside it.
 
-Vertical-first mobile build. Working action loop, bank, equipment, skills, crafting, market, combat, map, and log.
+Upload all files/folders from this zip to repo root.
 
-For less browser UI: Chrome menu → Add to Home screen / Install app.
+Includes portrait mobile UI, shared bank, equipment, combat, gathering, processing, crafting, market, quests, locked areas, achievements, pets, mount support, world log, HP regen, and persistent actions.
